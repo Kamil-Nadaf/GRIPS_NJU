@@ -1,0 +1,83 @@
+# GRIPS — GRB FRED Classifier Environment
+# Linux (Ubuntu host, China — uses Aliyun mirror)
+#
+# Build:
+#   docker build -t grips:latest -f Dockerfiles/Dockerfile .
+#
+# Run:
+#   docker run -d -p 8888:8888 \
+#     -v /home/USERNAME/Projects/GRIPS_NJU:/workspace \
+#     -v /home/USERNAME/Projects/Data:/workspace/data \
+#     --name grips grips:latest
+
+# alternatives: Tsinghua (https://pypi.tuna.tsinghua.edu.cn/simple) or NetEase (https://mirrors.163.com/pypi/simple/)
+
+FROM registry.cn-hangzhou.aliyuncs.com/library/python:3.12-slim
+
+WORKDIR /workspace
+
+# Use Aliyun PyPI mirror
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git \
+        build-essential \
+        curl && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN pip install --upgrade pip && \
+    pip install \
+        numpy \
+        scipy \
+        matplotlib \
+        astropy \
+        pandas \
+        scikit-learn \
+        joblib \
+        requests \
+        tqdm \
+        ipywidgets \
+        jupyter \
+        jupyterlab \
+        ipykernel \
+        astro-gdt-fermi \
+        h5py \
+        astroquery \
+        arviz
+
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install heapyx
+
+RUN git clone https://github.com/jyangch/responsum.git && \
+    pip install ./responsum && \
+    rm -rf responsum
+
+RUN git clone https://github.com/jyangch/gbmgeometry.git && \
+    pip install ./gbmgeometry && \
+    rm -rf gbmgeometry
+
+RUN git clone https://github.com/jyangch/gbm_drm_gen.git && \
+    pip install ./gbm_drm_gen && \
+    rm -rf gbm_drm_gen
+
+RUN pip install bayspec
+
+RUN pip install tables ipython_genutils
+
+RUN gdt-data init
+
+RUN pip install astro-gdt astro-gdt-fermi && \
+    gdt-data init
+
+RUN python -m ipykernel install --name grips --display-name "GRIPS (Python 3.12)"
+
+EXPOSE 8888
+
+CMD ["jupyter", "lab", \
+     "--ip=0.0.0.0", \
+     "--allow-root", \
+     "--no-browser", \
+     "--NotebookApp.token=''", \
+     "--NotebookApp.password=''", \
+     "--notebook-dir=/workspace"]
