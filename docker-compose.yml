@@ -1,0 +1,26 @@
+# Fermi GBM analysis: Jupyter (8888) + Streamlit UI (8501)
+#
+#   export DATA_HOST=/path/to/Data
+#   docker compose up --build -d
+
+services:
+  gbm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gbm:latest
+    container_name: gbm
+    ports:
+      - "8888:8888"
+      - "8501:8501"
+    volumes:
+      - ${REPO_ROOT:-.}:/workspace
+      - ${DATA_HOST:-/Users/kamil/Projects/Data}:/workspace/data
+    environment:
+      DATA_BASE: /workspace/data
+      MPLBACKEND: Agg
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+      PYTHONPATH: /workspace
+    working_dir: /workspace

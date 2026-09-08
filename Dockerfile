@@ -1,91 +1,93 @@
-# GRIPS — GRB FRED Classifier Environment
-# MacBook Pro M1 (automatic ARM64 native)
+# Fermi GBM analysis env + Streamlit UI (single image)
 #
-# Build:
-#   docker build -t grips:latest -f Dockerfiles/Dockerfile .
+# Build from this directory:
+#   docker compose up --build -d
 #
-# Run:
-#   docker run -d -p 8888:8888 \
-#     -v /Users/kamil/Projects/GRIPS_NJU:/workspace \
-#     -v /Users/kamil/Projects/Data:/workspace/data \
-#     --name grips grips:latest
+# Or:
+#   docker build -t gbm:latest .
+#   docker run -d -p 8888:8888 -p 8501:8501 \
+#     -v "$(cd .. && pwd)":/workspace \
+#     -v "${DATA_HOST:-$HOME/Data}":/workspace/data \
+#     -e DATA_BASE=/workspace/data \
+#     --name gbm gbm:latest
 #
-# Open in browser: http://localhost:8888
+# Jupyter: http://localhost:8888
+# UI:      http://localhost:8501
 
 FROM python:3.12-slim
 
 WORKDIR /workspace
 
-# Install system dependencies
-RUN for i in 1 2 3 4 5; do \
-        apt-get update && \
-        apt-get install -y git build-essential cmake gfortran liblapack-dev libblas-dev \
-            libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
-            libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-            libgbm1 libpango-1.0-0 libcairo2 libasound2 fonts-liberation && \
-        break || sleep 10; \
-    done && \
+# System dependencies (build tools + MultiNest + plotly chrome + 3ML)
+RUN apt-get update && \
+    apt-get install -y \
+        git build-essential swig gfortran cmake \
+        libopenblas-dev liblapack-dev \
+        libgomp1 libcfitsio-dev \
+        libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+        libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+        libgbm1 libpango-1.0-0 libcairo2 libasound2 fonts-liberation && \
     rm -rf /var/lib/apt/lists/*
 
-# Build MultiNest (libmultinest.so) — nested-sampling backend bayspec/pymultinest need.
-# Not on PyPI/apt as a compiled lib, must build from source; native ARM64 on M1 automatically.
-RUN git clone https://github.com/JohannesBuchner/MultiNest.git /opt/MultiNest && \
-    mkdir -p /opt/MultiNest/build && \
-    cd /opt/MultiNest/build && \
-    cmake .. && \
-    make
-
-ENV LD_LIBRARY_PATH="/opt/MultiNest/lib"
-
-# Install heapyx and its dependencies
+# heapyx stack
 RUN pip install --upgrade pip setuptools wheel && \
     pip install heapyx
 
-# Clone and install responsum
 RUN git clone https://github.com/jyangch/responsum.git && \
     pip install ./responsum && \
     rm -rf responsum
 
-# Clone and install gbmgeometry
 RUN git clone https://github.com/jyangch/gbmgeometry.git && \
     pip install ./gbmgeometry && \
     rm -rf gbmgeometry
 
-# Clone and install gbm_drm_gen
 RUN git clone https://github.com/jyangch/gbm_drm_gen.git && \
     pip install ./gbm_drm_gen && \
     rm -rf gbm_drm_gen
 
-# Install bayspec
 RUN pip install bayspec
 
-# Python wrapper for MultiNest — bayspec's .multinest() call needs this
+# Jupyter + Streamlit UI
+RUN pip install jupyter jupyterlab ipython ipykernel streamlit
+
+# Scientific extras
+RUN pip install arviz pandas scipy matplotlib tables astropy cartopy bilby \
+        ipython_genutils pytest dynesty corner
+
+# MultiNest + PyMultiNest (bayspec nested sampling)
+RUN git clone https://github.com/JohannesBuchner/MultiNest.git && \
+    cd MultiNest && \
+    mkdir -p build && cd build && \
+    cmake .. && \
+    make && \
+    cp ../lib/libmultinest.so /usr/local/lib/ && \
+    echo '/usr/local/lib' > /etc/ld.so.conf.d/multinest.conf && \
+    ldconfig && \
+    cd /workspace && rm -rf /workspace/MultiNest
+
 RUN pip install pymultinest
 
-# Kaleido (plotly's static-image backend) needs headless Chrome to export
-# PNG/PDF from plotly figures — bayspec's Plot.save() calls this internally.
+# Kaleido / plotly static export (bayspec Plot.save)
 RUN plotly_get_chrome -y
 
-# Install Jupyter and notebooks
-RUN pip install jupyter jupyterlab ipython ipykernel
+# Optional alternate spectral backend (3ML)
+# https://threeml.readthedocs.io/en/stable/notebooks/grb080916C.html
+RUN pip install "astromodels>=2.4" "threeml>=2.4"
 
-# Install additional scientific packages
-RUN pip install arviz pandas scipy matplotlib astropy cartopy bilby
-
-RUN pip install tables ipython_genutils
-
-# Set Jupyter configuration
+ENV LD_LIBRARY_PATH=/usr/local/lib
+ENV DATA_BASE=/workspace/data
+ENV MPLBACKEND=Agg
 ENV JUPYTER_ENABLE_LAB=yes
+ENV OMP_NUM_THREADS=1
+ENV MKL_NUM_THREADS=1
+ENV NUMEXPR_NUM_THREADS=1
 
-# Register kernel as "GRIPS"
-RUN python -m ipykernel install --name grips --display-name "GRIPS (Python 3.12)"
+RUN python -m ipykernel install --name gbm --display-name "GBM (Python 3.12)"
+
+COPY entrypoint.sh /usr/local/bin/gbm-entrypoint.sh
+RUN chmod +x /usr/local/bin/gbm-entrypoint.sh
 
 EXPOSE 8888
+EXPOSE 8501
 
-CMD ["jupyter", "lab", \
-     "--ip=0.0.0.0", \
-     "--allow-root", \
-     "--no-browser", \
-     "--NotebookApp.token=''", \
-     "--NotebookApp.password=''", \
-     "--notebook-dir=/workspace"]
+CMD ["/usr/local/bin/gbm-entrypoint.sh"]

@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local / macOS / data mounts (never push GBM products)
+.DS_Store
+**/.DS_Store
+data/
+*.fit.gz
+*.fits
+Sampler_Output/
+
+# Editor / local
+.vscode/
+.idea/

@@ -1,0 +1,49 @@
+# Native Streamlit theming (v1.63+). Users switch Light/Dark via ☰ → Settings.
+# Widget colors come from secondaryBackgroundColor — no black shells.
+
+[theme]
+base = "light"
+baseRadius = "0.75rem"
+buttonRadius = "0.75rem"
+showSidebarBorder = true
+
+# Shared accents (pastel periwinkle / peach)
+primaryColor = "#7b7ab8"
+
+[theme.light]
+backgroundColor = "#f4f0ec"
+secondaryBackgroundColor = "#e8e4f0"
+textColor = "#3d3a45"
+borderColor = "#d5d0dc"
+linkColor = "#5c5478"
+
+[theme.light.sidebar]
+# Darker purple-gray family
+backgroundColor = "#3f3e72"
+secondaryBackgroundColor = "#52518a"
+textColor = "#f5f3fa"
+borderColor = "#6a69a0"
+primaryColor = "#cbaed4"
+
+[theme.dark]
+backgroundColor = "#16141e"
+secondaryBackgroundColor = "#252232"
+textColor = "#f3eef5"
+borderColor = "#3a3650"
+linkColor = "#b6b8da"
+primaryColor = "#9f9ecb"
+
+[theme.dark.sidebar]
+backgroundColor = "#2a2840"
+secondaryBackgroundColor = "#3a3858"
+textColor = "#f5f3fa"
+borderColor = "#524e70"
+primaryColor = "#cbaed4"
+
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+
+[browser]
+gatherUsageStats = false
