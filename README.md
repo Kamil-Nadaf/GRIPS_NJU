@@ -6,11 +6,50 @@ Everything runs in Docker. Do not use the host macOS Python for fits.
 
 ## Quick start
 
-```bash
-# Point at your GBM data tree (TTE downloads + fit products live here)
-export DATA_HOST=/path/to/Data
+### 1. Clone
 
+```bash
+git clone git@github.com:Kamil-Nadaf/fermi-gbm-analysis.git
+cd fermi-gbm-analysis
+```
+
+### 2. Set host paths
+
+Bind mounts need **absolute** host paths. If you move or rename the repo later, recreate the container so mounts stay valid.
+
+```bash
+# This repo (code) → /workspace
+export REPO_ROOT="$(pwd)"
+
+# Your GBM data tree (TTE downloads + fit products) → /workspace/data
+export DATA_HOST=/absolute/path/to/Data
+```
+
+### 3. Build image and run container
+
+**Option A — Docker Compose (recommended)**
+
+```bash
 docker compose up --build -d
+```
+
+**Option B — `docker build` / `docker run` (same image/container names)**
+
+```bash
+docker build -t gbm:latest -f Dockerfile .
+
+docker stop gbm 2>/dev/null || true
+docker rm gbm 2>/dev/null || true
+
+docker run -d \
+  -p 8888:8888 -p 8501:8501 \
+  -v "${REPO_ROOT}:/workspace" \
+  -v "${DATA_HOST}:/workspace/data" \
+  -e DATA_BASE=/workspace/data \
+  -e MPLBACKEND=Agg \
+  -e OMP_NUM_THREADS=1 \
+  -e PYTHONPATH=/workspace \
+  --name gbm gbm:latest
 ```
 
 | Service | URL |
@@ -18,10 +57,25 @@ docker compose up --build -d
 | Jupyter Lab | http://localhost:8888 — kernel **GBM (Python 3.12)** |
 | Streamlit UI | http://localhost:8501 — time-integrated only |
 
+Restart / rebuild:
+
 ```bash
 docker compose down
 docker compose up --build -d
+# or re-run the Option B stop/rm/build/run block
 ```
+
+### 4. Smoke-test the pipeline
+
+```bash
+# Unit tests
+docker exec gbm python -m unittest discover -s /workspace/tests -v
+
+# Short tint fit (nlive=200); needs TTE data under $DATA_HOST
+docker exec gbm python -m cli.run_grb GRB150514A --nlive 200 --workers 1
+```
+
+Then open the Streamlit UI or `GRB_pipeline.ipynb` in Jupyter.
 
 ## What the UI does
 
@@ -75,17 +129,21 @@ Override data root with `DATA_BASE` (env) or `GRBContext.from_name(name, data_ba
 
 ## Catalog & GCN cross-checks
 
-`grb_config.py` ships the Yan et al. 2024 Table C1 **one_fits_all** pulses. Tint window `t1`/`t2` can differ from Table C1 slice boundaries (kept for later tres).
+Pulse catalog (detectors + slice boundaries) comes from Yan et al. 2024 Table C1
+([ApJ 962:85](https://doi.org/10.3847/1538-4357/ad14fb); arXiv: [2308.00772](https://arxiv.org/abs/2308.00772)).
+Tint windows `t1`/`t2` for a few bursts follow published GCN intervals (may differ from Table C1 slices, which stay for later time-resolved work).
 
-| GRB | Source | Tint | α | Ep (keV) |
-|-----|--------|------|---|----------|
-| GRB140606B | GCN 16363 CPL | −3.0 … 12.3 | −1.22 ± 0.04 | 473 ± 83 |
-| GRB150514A | GCN 17819 Band\* | 0 … 11.3 | −1.34 ± 0.07 | 73 ± 6 |
-| GRB190829A | GCN 25575 CPL | 0 … 4.0 | −1.41 ± 0.08 | 130 ± 20 |
+The UI **GCN compare** table shows these **literature** values next to your fit — they are not results from this repo. Always check the circulars:
 
-\*GBM published Band; pipeline fits CPL (soft Ep, steep β → comparable). Konus GCN 17823 CPL is an extra check for 150514A.
+| GRB | Literature source | Tint (s) | α | Ep (keV) |
+|-----|-------------------|----------|---|----------|
+| GRB140606B | [GCN 16363](https://gcn.nasa.gov/circulars/16363) CPL | −3.0 … 12.3 | −1.22 ± 0.04 | 473 ± 83 |
+| GRB150514A | [GCN 17819](https://gcn.nasa.gov/circulars/17819) Band\* | 0 … 11.3 | −1.34 ± 0.07 | 73 ± 6 |
+| GRB190829A | [GCN 25575](https://gcn.nasa.gov/circulars/25575) CPL | 0 … 4.0 | −1.41 ± 0.08 | 130 ± 20 |
 
-Do **not** use GRB 221009A (BOAT) for GCN CPL validation — main episode saturates GBM.
+\*GBM published Band in GCN 17819; this pipeline fits CPL by default (soft Ep + steep β → roughly comparable). Optional Konus-Wind check: [GCN 17823](https://gcn.nasa.gov/circulars/17823) CPL.
+
+Do **not** use GRB 221009A (BOAT) for GCN CPL validation — the main episode saturates GBM.
 
 Geometry still uses catalog detectors (may include BGO). Spectral fits default to NaI.
 
